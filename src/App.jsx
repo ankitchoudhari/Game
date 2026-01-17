@@ -236,7 +236,7 @@ const PokemonChess = () => {
         setTimerActive(false);
       }
     }
-  }, [board, difficulty]);
+  }, [board, difficulty, getValidMoves, isInCheck, checkForValidMoves]);
 
   const checkForValidMoves = (boardState, isWhite) => {
     for (let r = 0; r < 8; r++) {
