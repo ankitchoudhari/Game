@@ -27,6 +27,9 @@ const INITIAL_BOARD = [
   ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
 ];
 
+const isWhitePiece = (piece) => piece && piece === piece.toUpperCase();
+const isBlackPiece = (piece) => piece && piece === piece.toLowerCase();
+
 const PokemonChess = () => {
   const [board, setBoard] = useState(JSON.parse(JSON.stringify(INITIAL_BOARD)));
   const [selectedSquare, setSelectedSquare] = useState(null);
@@ -73,10 +76,7 @@ const PokemonChess = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const isWhitePiece = (piece) => piece && piece === piece.toUpperCase();
-  const isBlackPiece = (piece) => piece && piece === piece.toLowerCase();
-
-  const getValidMoves = (row, col, boardState = board) => {
+  const getValidMoves = useCallback((row, col, boardState) => {
     const piece = boardState[row][col];
     if (!piece) return [];
 
@@ -141,9 +141,9 @@ const PokemonChess = () => {
     }
 
     return moves;
-  };
+  }, []);
 
-  const isInCheck = (boardState, isWhiteKing) => {
+  const isInCheck = useCallback((boardState, isWhiteKing) => {
     let kingPos = null;
     for (let r = 0; r < 8; r++) {
       for (let c = 0; c < 8; c++) {
@@ -170,7 +170,27 @@ const PokemonChess = () => {
       }
     }
     return false;
-  };
+  }, [getValidMoves]);
+
+  const checkForValidMoves = useCallback((boardState, isWhite) => {
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const piece = boardState[r][c];
+        if (piece && (isWhite ? isWhitePiece(piece) : isBlackPiece(piece))) {
+          const moves = getValidMoves(r, c, boardState);
+          for (const [tr, tc] of moves) {
+            const testBoard = JSON.parse(JSON.stringify(boardState));
+            testBoard[tr][tc] = testBoard[r][c];
+            testBoard[r][c] = null;
+            if (!isInCheck(testBoard, isWhite)) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+    return false;
+  }, [getValidMoves, isInCheck]);
 
   const makeComputerMove = useCallback(() => {
     const possibleMoves = [];
@@ -179,7 +199,7 @@ const PokemonChess = () => {
       for (let c = 0; c < 8; c++) {
         const piece = board[r][c];
         if (piece && isBlackPiece(piece)) {
-          const moves = getValidMoves(r, c);
+          const moves = getValidMoves(r, c, board);
           moves.forEach(([tr, tc]) => {
             const newBoard = JSON.parse(JSON.stringify(board));
             newBoard[tr][tc] = newBoard[r][c];
@@ -236,27 +256,7 @@ const PokemonChess = () => {
         setTimerActive(false);
       }
     }
-  }, [board, difficulty]);
-
-  const checkForValidMoves = (boardState, isWhite) => {
-    for (let r = 0; r < 8; r++) {
-      for (let c = 0; c < 8; c++) {
-        const piece = boardState[r][c];
-        if (piece && (isWhite ? isWhitePiece(piece) : isBlackPiece(piece))) {
-          const moves = getValidMoves(r, c, boardState);
-          for (const [tr, tc] of moves) {
-            const testBoard = JSON.parse(JSON.stringify(boardState));
-            testBoard[tr][tc] = testBoard[r][c];
-            testBoard[r][c] = null;
-            if (!isInCheck(testBoard, isWhite)) {
-              return true;
-            }
-          }
-        }
-      }
-    }
-    return false;
-  };
+  }, [board, difficulty, getValidMoves, isInCheck, checkForValidMoves]);
 
   useEffect(() => {
     if (currentPlayer === 'black' && gameStatus === 'playing') {
@@ -298,7 +298,7 @@ const PokemonChess = () => {
           setValidMoves([]);
         }
       } else if (piece && isWhitePiece(piece)) {
-        const moves = getValidMoves(row, col);
+        const moves = getValidMoves(row, col, board);
         setSelectedSquare([row, col]);
         setValidMoves(moves);
       } else {
@@ -306,7 +306,7 @@ const PokemonChess = () => {
         setValidMoves([]);
       }
     } else if (piece && isWhitePiece(piece)) {
-      const moves = getValidMoves(row, col);
+      const moves = getValidMoves(row, col, board);
       setSelectedSquare([row, col]);
       setValidMoves(moves);
     }
@@ -385,10 +385,10 @@ const PokemonChess = () => {
                 </div>
                 {gameStatus !== 'playing' && (
                   <div className="bg-yellow-400 px-6 py-3 rounded-lg font-bold text-black text-lg shadow-lg animate-pulse">
-                    {gameStatus === 'white_wins' && '🎉 You Win!'}
-                    {gameStatus === 'black_wins' && '💪 Computer Wins!'}
-                    {gameStatus === 'white_wins_time' && '⏰ You Win by Time!'}
-                    {gameStatus === 'black_wins_time' && '⏰ Computer Wins by Time!'}
+                    {gameStatus === 'white_wins' && 'You Win!'}
+                    {gameStatus === 'black_wins' && 'Computer Wins!'}
+                    {gameStatus === 'white_wins_time' && 'You Win by Time!'}
+                    {gameStatus === 'black_wins_time' && 'Computer Wins by Time!'}
                   </div>
                 )}
               </div>
@@ -432,20 +432,20 @@ const PokemonChess = () => {
 
           <div className="space-y-4">
             <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 shadow-2xl border-2 border-white/20">
-              <h2 className="text-2xl font-bold text-white mb-4">⚙️ Game Controls</h2>
+              <h2 className="text-2xl font-bold text-white mb-4">Game Controls</h2>
               
               <div className="space-y-3">
                 <div>
-                  <label className="text-white text-sm mb-2 block font-semibold">🎮 Difficulty Level</label>
+                  <label className="text-white text-sm mb-2 block font-semibold">Difficulty Level</label>
                   <select
                     value={difficulty}
                     onChange={(e) => setDifficulty(e.target.value)}
                     disabled={moveHistory.length > 0}
                     className="w-full bg-white/20 text-white rounded-lg px-4 py-3 border-2 border-white/30 font-semibold text-lg"
                   >
-                    <option value="easy">😊 Easy</option>
-                    <option value="medium">🤔 Medium</option>
-                    <option value="hard">😈 Hard</option>
+                    <option value="easy">Easy</option>
+                    <option value="medium">Medium</option>
+                    <option value="hard">Hard</option>
                   </select>
                 </div>
 
@@ -469,14 +469,14 @@ const PokemonChess = () => {
             </div>
 
             <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 shadow-2xl border-2 border-white/20">
-              <h2 className="text-2xl font-bold text-white mb-4">📜 Move History</h2>
+              <h2 className="text-2xl font-bold text-white mb-4">Move History</h2>
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {moveHistory.length === 0 ? (
                   <p className="text-white/60 text-sm italic">No moves yet - start playing!</p>
                 ) : (
                   moveHistory.map((move, index) => (
                     <div key={index} className="text-white text-sm bg-white/10 px-3 py-2 rounded border border-white/20 font-semibold">
-                      Move {index + 1}: {move.player === 'white' ? '🔵 You' : '🟣 Computer'}
+                      Move {index + 1}: {move.player === 'white' ? 'You' : 'Computer'}
                     </div>
                   ))
                 )}
@@ -484,30 +484,30 @@ const PokemonChess = () => {
             </div>
 
             <div className="bg-gradient-to-br from-yellow-400/20 to-pink-400/20 backdrop-blur-lg rounded-2xl p-6 shadow-2xl border-2 border-yellow-400/50">
-              <h2 className="text-xl font-bold text-white mb-3">🎯 Pokemon Chess Pieces</h2>
+              <h2 className="text-xl font-bold text-white mb-3">Pokemon Chess Pieces</h2>
               <div className="space-y-2 text-sm text-white">
                 <div className="flex justify-between items-center bg-white/10 px-3 py-2 rounded">
-                  <span className="font-semibold">♔ King</span>
+                  <span className="font-semibold">King</span>
                   <span>Pikachu / Mewtwo</span>
                 </div>
                 <div className="flex justify-between items-center bg-white/10 px-3 py-2 rounded">
-                  <span className="font-semibold">♕ Queen</span>
+                  <span className="font-semibold">Queen</span>
                   <span>Dragonite / Gyarados</span>
                 </div>
                 <div className="flex justify-between items-center bg-white/10 px-3 py-2 rounded">
-                  <span className="font-semibold">♖ Rook</span>
+                  <span className="font-semibold">Rook</span>
                   <span>Charizard / Blastoise</span>
                 </div>
                 <div className="flex justify-between items-center bg-white/10 px-3 py-2 rounded">
-                  <span className="font-semibold">♗ Bishop</span>
+                  <span className="font-semibold">Bishop</span>
                   <span>Alakazam / Gengar</span>
                 </div>
                 <div className="flex justify-between items-center bg-white/10 px-3 py-2 rounded">
-                  <span className="font-semibold">♘ Knight</span>
+                  <span className="font-semibold">Knight</span>
                   <span>Rapidash / Ponyta</span>
                 </div>
                 <div className="flex justify-between items-center bg-white/10 px-3 py-2 rounded">
-                  <span className="font-semibold">♙ Pawn</span>
+                  <span className="font-semibold">Pawn</span>
                   <span>Bulbasaur / Squirtle</span>
                 </div>
               </div>
